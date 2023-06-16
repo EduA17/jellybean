@@ -11,7 +11,11 @@ Scans the file and applies the following overlays:
 - 4K Dolby Vision
 - 4K Dolby Vision with HDR fallback
 
+Run it only on 4K libraries!
+
 The script saves a backup of the original poster to `assets/originals`. Running the script with `overlays: false` will restore the backup.
+
+Tested on Linux, Jellyfin Version: 10.8.10 
 ## Getting started
 
 Edit the `.env` and the `config.yaml`
