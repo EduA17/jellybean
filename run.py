@@ -50,6 +50,7 @@ def main():
         if user["Policy"]["IsAdministrator"]:
             global user_id
             user_id = user["Id"]
+            logging.info(f"Admin user ID: {user_id}")
             break
 
     # Get list of libraries from the config.yaml file
@@ -57,6 +58,7 @@ def main():
         config_vars = yaml.safe_load(file)
 
     libraries = config_vars["libraries"]
+    logging.info(f"Lodaded config.yaml:\nLibraries: {libraries}")
 
     # Initialize empty list of library parent ids
     libraries_dict = {}
@@ -75,13 +77,19 @@ def main():
         views = response.json()["Items"]
 
         for view in views:
-            print(f"View Name: {view['Name']}")
+#            print(f"View Name: {view['Name']}")
+#            logging.info(f"View Name: {view['Name']}")
             if view['Name'] == library:
                 parent_id = view["Id"]
                 print(f"Parent ID: {parent_id}")
+                logging.info(f"Parent ID: {parent_id}")
                 collection_type = view["CollectionType"]
                 print(f'Collection Type: {collection_type}')
+                logging.info(f'Collection Type: {collection_type}')
                 break
+            else:
+                parent_id = None
+                collection_type = None
 
         # Add the library name and parent id to the dictionary
 
@@ -148,7 +156,11 @@ def main():
 
                 if overlay_config:
                     if tagged:
+                        print(f"{item['Name']} has custom overlay, skipping.")
+                        logging.info(f"{item['Name']} has custom overlay, skipping.")
                         continue
+                    print(f"{item['Name']} does not have a custom overlay. overlay to {item['Name']}: {item['Id']}")
+                    logging.info(f"Adding overlay to {item['Name']}: {item['Id']}")
                     if add_overlay(movie["Id"], item):
                         update_tag(movie, item, True)
                 else:
@@ -170,6 +182,8 @@ def main():
                 
                 tv_show = response2.json()
 
+                logging.info(f"Checking {item['Name']}: {tv_show['Id']}")
+
                 # Get all episodes from that TV Show
                 response3 = requests.get(f"{jellyfin_url}/Shows/{tv_show['Id']}/Episodes",
                                     headers={"X-Emby-Token": api_key})
@@ -177,6 +191,12 @@ def main():
                 episodes = response3.json()['Items']
 
                 # Get the first episode ID
+
+                if len(episodes) == 0:
+                    print(f"TV Show {item['Name']} has no episodes, skipping.")
+                    logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
+                    continue
+
                 episode_id = episodes[0]["Id"]
 
                 # Check that episode_id is not None
@@ -224,14 +244,14 @@ def get_all_items_library(library):
     items = response.json()["Items"]
     return items                  
 
-def check_tags(movie):
+def check_tags(file):
 
     # Check if the movie has the tag "custom-overlay"
-    if "custom-overlay" in movie["Tags"]:
-        print(f"{movie['Name']} has custom overlay.")
+    if "custom-overlay" in file["Tags"]:
+        print(f"{file['Name']} has custom overlay.")
         return True
     else:
-        print(f"{movie['Name']} does not have custom overlay.")
+        print(f"{file['Name']} does not have custom overlay.")
         return False
 
 def check_color(item):
@@ -244,7 +264,8 @@ def check_color(item):
 
     # Check if media_file has "Type": "Series"
     if media_file["Type"] == "Series":
-        print("Media file is a TV show")
+        print("Media file is a TV show, getting the first episode")
+        logging.info("Media file is a TV show, getting the first episode")
         # Get all episodes from that TV Show
         response2 = requests.get(f"{jellyfin_url}/Shows/{media_file['Id']}/Episodes",
                             headers={"X-Emby-Token": api_key})
@@ -267,24 +288,30 @@ def check_color(item):
             if media_stream['Codec'] == 'hevc' or media_stream['Codec'] == 'h264' or media_stream['Codec'] == 'vp9' or media_stream['Codec'] == 'av1':
                 if media_stream['VideoRange'] == 'SDR' and media_stream['VideoRangeType'] == 'SDR':
                     print("Color space is SDR")
+                    logging.info("Color space is SDR")
                     return '4KSDR'
                 elif media_stream['VideoRange'] == 'HDR' and (media_stream['VideoRangeType'].startswith('HDR10') or media_stream['VideoRangeType'].startswith('HLG')):
                     if 'VideoDoViTitle' in media_stream:
                         if media_stream['VideoDoViTitle'].startswith('DV Profile'):
                             print("Color space is DV + HDR")
+                            logging.info("Color space is DV + HDR")
                             return '4KDVHDR'
                     else:
                         print("Color space is HDR Only")
+                        logging.info("Color space is HDR Only")
                         return '4KHDR'
                 elif media_stream['VideoRange'] == 'HDR' and media_stream['VideoRangeType'] == 'DOVI':
                     if 'VideoDoViTitle' in media_stream and media_stream['VideoDoViTitle'].startswith('DV Profile'):
                         print("Color space is DV only")
+                        logging.info("Color space is DV only")
                         return '4KDV'
                     else:
                         print("Unknown color space")
+                        logging.info("Unknown color space")
                         return '4KSDR'
                 else:
-                    print("Unknown color space") 
+                    print("Unknown color space")
+                    logging.info("Unknown color space") 
                     return '4KSDR'
 
 def update_tag(movie, item, add):

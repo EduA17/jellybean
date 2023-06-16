@@ -1,11 +1,11 @@
 libraries: 
   Movies - 4K:    
     overlays: true # Enable overlays for this library. 'false' will remove existing overlays
-    skip: false # Skip this library
+    skip: true # Skip this library
 
   Movies - 4K Dolby Vision:
     overlays: true
-    skip: false
+    skip: true
 
   TV Shows - 4K:
     overlays: true
