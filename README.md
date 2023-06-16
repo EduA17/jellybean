@@ -1,5 +1,5 @@
 # Jellybean
-A Jellyfin overlay and (*soon*) collection manager
+An overlay and (*soon*) collection manager for [Jellyfin](https://github.com/jellyfin/jellyfin)
 
 <img width="575" alt="CleanShot 2023-06-15 at 21 48 27@2x" src="https://github.com/EduAndino17/jellybean/assets/11341292/4c8c66dd-519a-4ddc-bb86-5347e27acf0e">
 
