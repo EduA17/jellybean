@@ -1,8 +1,7 @@
 # Jellybean
 A Jellyfin overlay and (*soon*) collection manager
 
-<img width="575" alt="CleanShot 2023-06-15 at 21 48 27@2x" src="https://github.com/EduAndino17/jellybean/assets/11341292/9191da2a-8ec4-48b8-983d-37985443d831">
-
+<img width="575" alt="CleanShot 2023-06-15 at 21 48 27@2x" src="https://github.com/EduAndino17/jellybean/assets/11341292/4c8c66dd-519a-4ddc-bb86-5347e27acf0e">
 
 ## What it does so far
 Scans the file and applies the following overlays: 
