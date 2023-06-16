@@ -1,0 +1,36 @@
+# Jellybean
+A Jellyfin overlay and (*soon*) collection manager
+
+<img width="575" alt="CleanShot 2023-06-15 at 21 48 27@2x" src="https://github.com/EduAndino17/jellybean/assets/11341292/9191da2a-8ec4-48b8-983d-37985443d831">
+
+
+## What it does so far
+Scans the file and applies the following overlays: 
+
+- 4K UHD
+- 4K HDR
+- 4K Dolby Vision
+- 4K Dolby Vision with HDR fallback
+
+The script saves a backup of the original poster to `assets/originals`. Running the script with `overlays: false` will restore the backup.
+## Getting started
+
+Edit the `.env` and the `config.yaml`
+
+``` 
+python3 run.py
+```
+
+## Next steps
+
+- Emby Support
+- Collections
+
+## About
+This project is a work in progress. I wanted a way to replicate what PMM does with 4K Overlays in Jellyfin.
+
+It is not affiliated with Jellyfin. It is not endorsed by Jellyfin.
+
+Heavily inspired by [Plex-Meta-Manager](https://github.com/meisnate12/Plex-Meta-Manager)
+
+Overlay images by [Plex-Meta-Manager](https://github.com/meisnate12/Plex-Meta-Manager)
