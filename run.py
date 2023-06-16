@@ -25,7 +25,7 @@ for file in os.listdir('./logs'):
         os.remove(f'./logs/{file}')
 
 # Generate a unique log file name using a timestamp
-log_file = f"./logs/jellybean.log"
+log_file = "./logs/jellybean.log"
 
 # Configure the logging settings
 logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
