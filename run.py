@@ -19,9 +19,13 @@ if not os.path.exists('./temp'):
 if not os.path.exists('./logs'):
     os.makedirs('./logs')
 
+# Remove any existing log files
+for file in os.listdir('./logs'):
+    if file.endswith('.log'):
+        os.remove(f'./logs/{file}')
+
 # Generate a unique log file name using a timestamp
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-log_file = f"./logs/output_{timestamp}.log"
+log_file = f"./logs/jellybean.log"
 
 # Configure the logging settings
 logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

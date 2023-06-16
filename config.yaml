@@ -9,8 +9,8 @@ libraries:
 
   TV Shows - 4K:
     overlays: true
-    skip: true
+    skip: false
 
   TV Shows - 4K Dolby Vision:
     overlays: true
-    skip: true
+    skip: false
