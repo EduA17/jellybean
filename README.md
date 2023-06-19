@@ -26,8 +26,11 @@ python3 run.py
 
 ## Next steps
 
-- Emby Support
 - Collections
+- Emby Support
+
+### In the long run
+- More Overlays (Audio Codecs, Ratings)
 
 ## About
 This project is a work in progress. I wanted a way to replicate what PMM does with 4K Overlays in Jellyfin.
