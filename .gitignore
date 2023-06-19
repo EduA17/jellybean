@@ -1,4 +1,7 @@
 .env
 !.env.sample
 assets/originals
+config.yaml
+!config.yaml.sample
 logs/*
+jellybean.log
