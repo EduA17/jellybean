@@ -2,6 +2,6 @@ requests
 python-dotenv
 PyYAML
 Pillow
-base64
+pybase64
 json
 logging

@@ -1,4 +1,3 @@
-#from distutils import config
 import os
 import requests
 from dotenv import load_dotenv
@@ -8,7 +7,6 @@ from PIL import Image
 import base64
 import json
 import logging
-#import datetime
 
 log_file = "jellybean.log"
 
@@ -32,18 +30,13 @@ if not os.path.exists('./temp'):
 if not os.path.exists('./logs'):
     os.makedirs('./logs')
 
-# Remove any existing log files
+# Prepare logging
 for file in os.listdir('./logs'):
     if file.endswith('.log'):
         os.remove(f'./logs/{file}')
-
-# Generate a log file
 log_file = "jellybean.log"
 
-# Load .env file
 load_dotenv(".env")
-
-# Global variables
 emby_url = os.getenv('EMBY_URL')
 api_key = os.getenv('EMBY_API_KEY')
 
@@ -69,7 +62,6 @@ def main():
     libraries = config_vars["libraries"]
     logging.info(f"Loaded config.yaml:\n {libraries}")
 
-    # Initialize empty list of library parent ids
     libraries_dict = {}
 
     # Get the parent id of each library
@@ -78,8 +70,6 @@ def main():
         # Get all items
         response = requests.get(f"{emby_url}/Users/{user_id}/Views",
                                 headers={"X-Emby-Token": api_key})
-
-        # print(library)
 
         views = response.json()["Items"]
 
@@ -96,6 +86,7 @@ def main():
 
         # Add the library name and parent id to the dictionary
         libraries_dict.update({library: {"parent_id": parent_id, "collection_type": collection_type}})
+
     # Cycle through the libraries
     for library in libraries_dict:
 
@@ -103,10 +94,7 @@ def main():
 
         library_type = libraries_dict[library].get('collection_type')
 
-        # Call function to get list of items in the library
         items = get_all_items_library(libraries_dict[library])
-
-        # Check Library Type     
 
         if library_type == 'none':
             logging.info(f"{library}: Library is not set to movies or tv shows, skipping library.")
@@ -165,7 +153,7 @@ def overlays(library, library_type, items, config_vars):
     else:
         logging.info(f"{library}: Overlays is false in the config.yaml file, removing overlays.")
 
-    #### MOVIES ####
+    # MOVIES
 
     if library_type == 'movies':
         # Loop through all movies
@@ -203,7 +191,7 @@ def overlays(library, library_type, items, config_vars):
                     remove_overlay(movie["Id"], item, 'backdrop')
                     update_tag(movie, item, False, tag)
 
-    ### TV SHOWS ###
+    # TV SHOWS
 
     elif library_type == 'tvshows':
         logging.info(f'Found {len(items)} items in {library}')
@@ -266,7 +254,6 @@ def overlays(library, library_type, items, config_vars):
 
 def get_all_items_library(library):
     if library['collection_type'] == 'movies':
-        # Get all items in the library
         response = requests.get(f"{emby_url}/Items",
                                 headers={"X-Emby-Token": api_key},
                                 params={"ParentId": library["parent_id"],
@@ -274,7 +261,6 @@ def get_all_items_library(library):
         items_recursive = response.json()["Items"]
         items = [item for item in items_recursive if not item.get('IsFolder')]
     else:
-        # Get all items in the library
         response = requests.get(f"{emby_url}/Items",
                                 headers={"X-Emby-Token": api_key},
                                 params={"ParentId": library["parent_id"]})
@@ -283,8 +269,6 @@ def get_all_items_library(library):
 
 
 def check_tags(file):
-    # Check if the movie has the tag "custom-overlay"
-    tag = {'Name': 'custom-overlay'}
     exists = any(item['Name'] == "custom-overlay" for item in file['TagItems'])
     return exists
 
@@ -318,14 +302,12 @@ def check_hdr(item):
     # Check if media_file resolution is 4K
     if media_file['Width'] >= 2500:
         logging.info(f"Media file: {media_file['Name']}, and path is: {media_file['MediaSources'][0]['Path']}")
-        # Check for Dolby Vision
         if 'DV' in media_file['MediaSources'][0]['Path']:
             if 'HDR' in media_file['MediaSources'][0]['Path']:
                 logging.info("Media file is DV + HDR")
                 return '4KDVHDR'
             logging.info("Media file is DV")
             return '4KDV'
-        # Check for HDR
         elif 'HDR' in media_file['MediaSources'][0]['Path']:
             if 'HDR10Plus' in media_file['MediaSources'][0]['Path']:
                 logging.info("Media file is HDR10+")
@@ -338,6 +320,7 @@ def check_hdr(item):
     else:
         # Placeholder for 1080p overlays
         return '1080p'
+
 
 def update_tag(movie, item, add, tag):
     if add:
@@ -420,7 +403,7 @@ def add_overlay(movie_id, item, image_type):
     if image_type == 'backdrop':
         # Delete the backdrop image from the server
         response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
-                                      headers={"X-Emby-Token": api_key})
+                                   headers={"X-Emby-Token": api_key})
 
     # Upload the new image to the server
     with open(f'./temp/{movie_id}.jpg', 'rb') as file:
@@ -437,8 +420,6 @@ def add_overlay(movie_id, item, image_type):
 
     # Send the POST request
     response = requests.post(url, headers=headers, data=image_data_base64)
-
-    # print(response)
 
     # Check the response
     if response.status_code == 204:
