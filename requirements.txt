@@ -3,5 +3,4 @@ python-dotenv
 PyYAML
 Pillow
 pybase64
-json
 logging
