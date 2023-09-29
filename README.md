@@ -1,7 +1,5 @@
 # Jellybean
-An overlay and (*soon*) collection manager for [Jellyfin](https://github.com/jellyfin/jellyfin)
-
-<img width="575" alt="CleanShot 2023-06-15 at 21 48 27@2x" src="https://github.com/EduAndino17/jellybean/assets/11341292/4c8c66dd-519a-4ddc-bb86-5347e27acf0e">
+An overlay tool for [Emby](https://emby.media/)
 
 ## What it does so far
 Scans the file and applies the following overlays: 
@@ -15,7 +13,7 @@ Run it only on 4K libraries!
 
 The script saves a backup of the original poster to `assets/originals`. Running the script with `overlays: false` will restore the backup.
 
-Tested on Linux, Jellyfin Version: 10.8.10 
+Tested on Linux, Emby Beta Version: 4.8.0.46
 ## Getting started
 
 Edit the `.env` and the `config.yaml`
@@ -24,18 +22,10 @@ Edit the `.env` and the `config.yaml`
 python3 run.py
 ```
 
-## Next steps
-
-- Collections
-- Emby Support
-
-### In the long run
-- More Overlays (Audio Codecs, Ratings)
-
 ## About
-This project is a work in progress. I wanted a way to replicate what PMM does with 4K Overlays in Jellyfin.
+This project is a work in progress. I wanted a way to replicate what PMM does with 4K Overlays in Emby.
 
-It is not affiliated with Jellyfin. It is not endorsed by Jellyfin.
+It is not affiliated with Emby. It is not endorsed by Emby.
 
 Heavily inspired by [Plex-Meta-Manager](https://github.com/meisnate12/Plex-Meta-Manager)
 

@@ -1,0 +1,6 @@
+requests
+python-dotenv
+PyYAML
+Pillow
+pybase64
+logging
