@@ -212,15 +212,16 @@ def overlays(library, library_type, items, config_vars):
             # Get all episodes from that TV Show
             response3 = requests.get(f"{emby_url}/Shows/{tv_show['Id']}/Episodes",
                                      headers={"X-Emby-Token": api_key})
-
-            episodes = response3.json()['Items']
-
-            # Get the first episode ID
-
-            if len(episodes) == 0:
+            try:
+                episodes = response3.json()['Items']
+            except json.JSONDecodeError:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
 
+            # Get the first episode ID
+            if len(episodes) == 0:
+                logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
+                continue
             episode_id = episodes[0]["Id"]
 
             # Check that episode_id is not None
