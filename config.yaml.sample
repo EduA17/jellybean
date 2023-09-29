@@ -1,6 +1,6 @@
 libraries:
   Movies - 4K: # This is the name of the Jellyfin library
-    enabled: false # A vaule of true will enable the script to run on this library. false will skip the library
+    enabled: false # A value of true will enable the script to run on this library. false will skip the library
     overlays: false # Add overlays. true will add overlays, false will remove them
 
   Movies - 4K Dolby Vision:
