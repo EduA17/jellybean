@@ -23,8 +23,10 @@ logging.basicConfig(
 )
 
 # Ensure the needed folders exist
-if not os.path.exists('./assets/originals'):
-    os.makedirs('./assets/originals')
+if not os.path.exists('./assets/originals/primary'):
+    os.makedirs('./assets/originals/primary')
+if not os.path.exists('./assets/originals/backdrop'):
+    os.makedirs('./assets/originals/backdrop')
 if not os.path.exists('./temp'):
     os.makedirs('./temp')
 if not os.path.exists('./logs'):
