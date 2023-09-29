@@ -1,4 +1,4 @@
-from distutils import config
+#from distutils import config
 import os
 import requests
 from dotenv import load_dotenv
@@ -8,7 +8,7 @@ from PIL import Image
 import base64
 import json
 import logging
-import datetime
+#import datetime
 
 log_file = "jellybean.log"
 
@@ -96,7 +96,6 @@ def main():
 
         # Add the library name and parent id to the dictionary
         libraries_dict.update({library: {"parent_id": parent_id, "collection_type": collection_type}})
-        logging.info(f"Library Dictionary: {libraries_dict}")
     # Cycle through the libraries
     for library in libraries_dict:
 
@@ -121,7 +120,6 @@ def main():
 
         logging.info(
             f"Library Name: {library} \nLibrary Type: {library_type}\nAction: Library is enabled in the config.yaml file, checking overlays.\n------")
-        print("about to call overlays")
         overlays(library, library_type, items, config_vars)
 
 
@@ -193,14 +191,16 @@ def overlays(library, library_type, items, config_vars):
                     continue
                 logging.info(
                     f"{item['Name']} does not have a custom overlay. Adding overlay to {item['Name']}: {item['Id']}")
-                if add_overlay(movie["Id"], item):
+                if add_overlay(movie["Id"], item, 'primary'):
+                    add_overlay(movie["Id"], item, 'backdrop')
                     update_tag(movie, item, True, tag)
             else:
                 if not tagged:
                     logging.info(f"{item['Name']} does not have a custom overlay, skipping.")
                     continue
                 logging.info(f"{item['Name']} has a custom overlay. Removing overlay from {item['Name']}: {item['Id']}")
-                if remove_overlay(movie["Id"], item):
+                if remove_overlay(movie["Id"], item, 'primary'):
+                    remove_overlay(movie["Id"], item, 'backdrop')
                     update_tag(movie, item, False, tag)
 
     ### TV SHOWS ###
@@ -252,32 +252,39 @@ def overlays(library, library_type, items, config_vars):
                 if tagged:
                     continue
                 logging.info(f"Adding overlay to {item['Name']}: {tv_show['Id']}")
-                if add_overlay(tv_show["Id"], item):
+                if add_overlay(tv_show["Id"], item, 'primary'):
+                    add_overlay(tv_show["Id"], item, 'backdrop')
                     update_tag(tv_show, item, True, tag)
             else:
                 if not tagged:
                     continue
                 logging.info(f"Removing overlay from {item['Name']}: {tv_show['Id']}")
-                if remove_overlay(tv_show["Id"], item):
+                if remove_overlay(tv_show["Id"], item, 'primary'):
+                    remove_overlay(tv_show["Id"], item, 'backdrop')
                     update_tag(tv_show, item, False, tag)
 
 
 def get_all_items_library(library):
-    # Get all items in the library
-    response = requests.get(f"{emby_url}/Items",
-                            headers={"X-Emby-Token": api_key},
-                            params={"ParentId": library["parent_id"],
-                                    "Recursive": "true"})
-
-    items = response.json()["Items"]
+    if library['collection_type'] == 'movies':
+        # Get all items in the library
+        response = requests.get(f"{emby_url}/Items",
+                                headers={"X-Emby-Token": api_key},
+                                params={"ParentId": library["parent_id"],
+                                        "Recursive": "true"})
+        items_recursive = response.json()["Items"]
+        items = [item for item in items_recursive if not item.get('IsFolder')]
+    else:
+        # Get all items in the library
+        response = requests.get(f"{emby_url}/Items",
+                                headers={"X-Emby-Token": api_key},
+                                params={"ParentId": library["parent_id"]})
+        items = response.json()["Items"]
     return items
 
 
 def check_tags(file):
     # Check if the movie has the tag "custom-overlay"
     tag = {'Name': 'custom-overlay'}
-    logging.info(f"Checking if {file['Name']} has tag {tag['Name']}")
-    logging.info(f"Tags: {file['TagItems']}")
     exists = any(item['Name'] == "custom-overlay" for item in file['TagItems'])
     return exists
 
@@ -357,8 +364,8 @@ def update_tag(movie, item, add, tag):
         logging.info(f'Failed to update tag for {item["Name"]}')
 
 
-def add_overlay(movie_id, item):
-    logging.info(f"Adding overlay to {item['Name']}: {movie_id}")
+def add_overlay(movie_id, item, image_type):
+    logging.info(f"Adding {image_type} overlay to {item['Name']}: {movie_id}")
 
     response = requests.get(f"{emby_url}/Items/{movie_id}/Images",
                             headers={"X-Emby-Token": api_key})
@@ -370,35 +377,35 @@ def add_overlay(movie_id, item):
         return False
 
     # Save a copy of the original poster
-    response = requests.get(f"{emby_url}/Items/{movie_id}/Images/Primary",
+    response = requests.get(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                             headers={"X-Emby-Token": api_key})
 
-    with open(f"./assets/originals/{movie_id}.jpg", "wb") as f:
+    with open(f"./assets/originals/{image_type}/{movie_id}.jpg", "wb") as f:
         f.write(response.content)
 
     overlay_name = check_hdr(item)
 
     # Check if the Primary image exists
-    if not os.path.exists(f'./assets/originals/{movie_id}.jpg'):
-        logging.info(f"{item['Name']} does not have a Primary image, skipping.")
+    if not os.path.exists(f'./assets/originals/{image_type}/{movie_id}.jpg'):
+        logging.info(f"{item['Name']} does not have a {image_type} image, skipping.")
         return False
 
     # Check if the overlay file exists
-    if not os.path.exists(f'./assets/overlays/{overlay_name}.png'):
+    if not os.path.exists(f'./assets/overlays/{image_type}/{overlay_name}.png'):
         logging.info(f"Overlay {overlay_name}.png does not exist, skipping.")
         return False
 
     # combine poster with the logo
     try:
-        img1 = Image.open(f'./assets/originals/{movie_id}.jpg')
-    except PIL.UnidentifiedImageError as e:
-        logging.error(f"Unable to open {movie_id}.jpg, skipping.")
-        os.remove(f'./assets/originals/{movie_id}.jpg')
+        img1 = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
+    except PIL.UnidentifiedImageError:
+        logging.error(f"Unable to open {image_type}/{movie_id}.jpg, skipping.")
+        os.remove(f'./assets/originals/{image_type}/{movie_id}.jpg')
         return False
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         logging.error(f"Poster not found for {movie_id}.jpg, skipping.")
         return False
-    img2 = Image.open(f'./assets/overlays/{overlay_name}.png')
+    img2 = Image.open(f'./assets/overlays/{image_type}/{overlay_name}.png')
 
     # Resize the second image to match the first one if they have different sizes
     if img1.size != img2.size:
@@ -409,6 +416,11 @@ def add_overlay(movie_id, item):
 
     # Save the new image
     combined.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
+
+    if image_type == 'backdrop':
+        # Delete the backdrop image from the server
+        response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
+                                      headers={"X-Emby-Token": api_key})
 
     # Upload the new image to the server
     with open(f'./temp/{movie_id}.jpg', 'rb') as file:
@@ -421,7 +433,7 @@ def add_overlay(movie_id, item):
                "Content-Type": "image/jpeg"}
 
     # Define the endpoint URL
-    url = f"{emby_url}/Items/{movie_id}/Images/Primary"
+    url = f"{emby_url}/Items/{movie_id}/Images/{image_type}/"
 
     # Send the POST request
     response = requests.post(url, headers=headers, data=image_data_base64)
@@ -439,7 +451,7 @@ def add_overlay(movie_id, item):
         return False
 
 
-def remove_overlay(movie_id, item):
+def remove_overlay(movie_id, item, image_type):
     response = requests.get(f"{emby_url}/Items/{movie_id}/Images",
                             headers={"X-Emby-Token": api_key})
 
@@ -451,10 +463,10 @@ def remove_overlay(movie_id, item):
 
     try:
         # Upload the new image to the server
-        with open(f'./assets/originals/{movie_id}.jpg', 'rb') as file:
+        with open(f'./assets/originals/{image_type}/{movie_id}.jpg', 'rb') as file:
             image_data = file.read()
-    except FileNotFoundError as e:
-        logging.error(f"Unable to open {movie_id}.jpg, skipping.")
+    except FileNotFoundError:
+        logging.error(f"Unable to open {image_type}/{movie_id}.jpg, skipping.")
         return False
 
     image_data_base64 = base64.b64encode(image_data)
@@ -464,7 +476,7 @@ def remove_overlay(movie_id, item):
                "Content-Type": "image/jpeg"}
 
     # Define the endpoint URL
-    url = f"{emby_url}/Items/{movie_id}/Images/Primary"
+    url = f"{emby_url}/Items/{movie_id}/Images/{image_type}"
 
     # Send the POST request
     response = requests.post(url, headers=headers, data=image_data_base64)
@@ -474,7 +486,7 @@ def remove_overlay(movie_id, item):
     # Check the response
     if response.status_code == 204:
         logging.info('Image uploaded successfully')
-        os.remove(f'./assets/originals/{movie_id}.jpg')
+        os.remove(f'./assets/originals/{image_type}/{movie_id}.jpg')
         return True
     else:
         logging.info('Failed to upload image')

@@ -22,13 +22,6 @@ Edit the `.env` and the `config.yaml`
 python3 run.py
 ```
 
-## Next steps
-
-- Collections
-
-### In the long run
-- More Overlays (Audio Codecs, Ratings)
-
 ## About
 This project is a work in progress. I wanted a way to replicate what PMM does with 4K Overlays in Emby.
 
