@@ -222,7 +222,6 @@ def overlays(library, library_type, items, config_vars):
             if len(episodes) == 0:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
-
             episode_id = episodes[0]["Id"]
 
             # Check that episode_id is not None
