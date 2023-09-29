@@ -27,6 +27,8 @@ if not os.path.exists('./assets/originals/primary'):
     os.makedirs('./assets/originals/primary')
 if not os.path.exists('./assets/originals/backdrop'):
     os.makedirs('./assets/originals/backdrop')
+if not os.path.exists('./assets/originals/thumb'):
+    os.makedirs('./assets/originals/thumb')
 if not os.path.exists('./temp'):
     os.makedirs('./temp')
 if not os.path.exists('./logs'):
@@ -182,7 +184,7 @@ def overlays(library, library_type, items, config_vars):
                 logging.info(
                     f"{item['Name']} does not have a custom overlay. Adding overlay to {item['Name']}: {item['Id']}")
                 if add_overlay(movie["Id"], item, 'primary'):
-                    add_overlay(movie["Id"], item, 'backdrop')
+                    add_overlay(movie["Id"], item, 'thumb')
                     update_tag(movie, item, True, tag)
             else:
                 if not tagged:
@@ -190,7 +192,7 @@ def overlays(library, library_type, items, config_vars):
                     continue
                 logging.info(f"{item['Name']} has a custom overlay. Removing overlay from {item['Name']}: {item['Id']}")
                 if remove_overlay(movie["Id"], item, 'primary'):
-                    remove_overlay(movie["Id"], item, 'backdrop')
+                    remove_overlay(movie["Id"], item, 'thumb')
                     update_tag(movie, item, False, tag)
 
     # TV SHOWS
@@ -243,14 +245,14 @@ def overlays(library, library_type, items, config_vars):
                     continue
                 logging.info(f"Adding overlay to {item['Name']}: {tv_show['Id']}")
                 if add_overlay(tv_show["Id"], item, 'primary'):
-                    add_overlay(tv_show["Id"], item, 'backdrop')
+                    add_overlay(tv_show["Id"], item, 'thumb')
                     update_tag(tv_show, item, True, tag)
             else:
                 if not tagged:
                     continue
                 logging.info(f"Removing overlay from {item['Name']}: {tv_show['Id']}")
                 if remove_overlay(tv_show["Id"], item, 'primary'):
-                    remove_overlay(tv_show["Id"], item, 'backdrop')
+                    remove_overlay(tv_show["Id"], item, 'thumb')
                     update_tag(tv_show, item, False, tag)
 
 
@@ -361,16 +363,22 @@ def add_overlay(movie_id, item, image_type):
         logging.info(f"Movie {item['Name']} has no poster, skipping.")
         return False
 
-    # Save a copy of the original poster
+    # Save a copy of the original image
     response = requests.get(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                             headers={"X-Emby-Token": api_key})
+
+    if image_type == 'thumb' and response.status_code == 404:
+        logging.info(f"Movie {item['Name']} has no thumb, looking for backdrop.")
+        image_type = 'backdrop'
+        response = requests.get(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
+                                headers={"X-Emby-Token": api_key})
 
     with open(f"./assets/originals/{image_type}/{movie_id}.jpg", "wb") as f:
         f.write(response.content)
 
     overlay_name = check_hdr(item)
 
-    # Check if the Primary image exists
+    # Check if the image exists
     if not os.path.exists(f'./assets/originals/{image_type}/{movie_id}.jpg'):
         logging.info(f"{item['Name']} does not have a {image_type} image, skipping.")
         return False
@@ -402,9 +410,7 @@ def add_overlay(movie_id, item, image_type):
     # Save the new image
     combined.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
 
-    if image_type == 'backdrop':
-        # Delete the backdrop image from the server
-        response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
+    response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                                    headers={"X-Emby-Token": api_key})
 
     # Upload the new image to the server
@@ -468,7 +474,7 @@ def remove_overlay(movie_id, item, image_type):
 
     # Check the response
     if response.status_code == 204:
-        logging.info('Image uploaded successfully')
+        logging.info(f'{image_type} image uploaded successfully')
         os.remove(f'./assets/originals/{image_type}/{movie_id}.jpg')
         return True
     else:
