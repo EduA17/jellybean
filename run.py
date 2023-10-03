@@ -3,10 +3,11 @@ import requests
 from dotenv import load_dotenv
 import yaml
 import PIL
-from PIL import Image
+from PIL import Image, ImageDraw
 import base64
 import json
 import logging
+import re
 
 log_file = "jellybean.log"
 
@@ -44,8 +45,12 @@ load_dotenv(".env")
 emby_url = os.getenv('EMBY_URL')
 api_key = os.getenv('EMBY_API_KEY')
 
+with open('audio_codecs.yml', 'r') as file:
+    regexes = yaml.safe_load(file)
+    audio_regex = regexes['regex']
 
 def main():
+
     # Get admin user ID
     response = requests.get(f"{emby_url}/Users",
                             headers={"X-Emby-Token": api_key})
@@ -326,6 +331,43 @@ def check_hdr(item):
         # Placeholder for 1080p overlays
         return '1080p'
 
+def check_audio(item):
+    response = requests.get(f"{emby_url}/Users/{user_id}/Items/{item['Id']}",
+                            headers={"X-Emby-Token": api_key})
+
+    media_file = response.json()
+
+    # Check if media_file has "Type": "Series"
+    if media_file["Type"] == "Series":
+        logging.info("Media file is a TV show, getting the first episode")
+        # Get all episodes from that TV Show
+        response2 = requests.get(f"{emby_url}/Shows/{media_file['Id']}/Episodes",
+                                 headers={"X-Emby-Token": api_key})
+
+        episodes = response2.json()['Items']
+
+        # Get the first episode ID
+        episode_id = episodes[0]["Id"]
+
+        response3 = requests.get(f"{emby_url}/Users/{user_id}/Items/{episode_id}",
+                                 headers={"X-Emby-Token": api_key})
+
+        episode = response3.json()
+
+        media_file = episode
+
+    # Check if media_file resolution is 4K
+    path = media_file['MediaSources'][0]['Path']
+
+    for condition in audio_regex:
+        key = condition["key"]
+        regex = condition["value"]
+
+        if re.search(regex, path):
+            logging.info(f"Media file has audio codec: {key}")
+            return key
+    return None
+
 
 def update_tag(movie, item, add, tag):
     if add:
@@ -377,21 +419,25 @@ def add_overlay(movie_id, item, image_type):
     with open(f"./assets/originals/{image_type}/{movie_id}.jpg", "wb") as f:
         f.write(response.content)
 
-    overlay_name = check_hdr(item)
+    resolution_overlay_name = check_hdr(item)
+    audio_overlay_name = check_audio(item)
 
-    # Check if the image exists
+    # Check if the images exists
     if not os.path.exists(f'./assets/originals/{image_type}/{movie_id}.jpg'):
         logging.info(f"{item['Name']} does not have a {image_type} image, skipping.")
         return False
 
     # Check if the overlay file exists
-    if not os.path.exists(f'./assets/overlays/{image_type}/{overlay_name}.png'):
-        logging.info(f"Overlay {overlay_name}.png does not exist, skipping.")
+    if not os.path.exists(f'./assets/overlays/resolution/{resolution_overlay_name}.png'):
+        logging.error(f"Overlay {resolution_overlay_name}.png does not exist, skipping.")
+        return False
+    if not os.path.exists(f'./assets/overlays/audio/{audio_overlay_name}.png'):
+        logging.error(f"Overlay {audio_overlay_name}.png does not exist, skipping.")
         return False
 
     # combine poster with the logo
     try:
-        img1 = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
+        original_image = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
     except PIL.UnidentifiedImageError:
         logging.error(f"Unable to open {image_type}/{movie_id}.jpg, skipping.")
         os.remove(f'./assets/originals/{image_type}/{movie_id}.jpg')
@@ -399,17 +445,93 @@ def add_overlay(movie_id, item, image_type):
     except FileNotFoundError:
         logging.error(f"Poster not found for {movie_id}.jpg, skipping.")
         return False
-    img2 = Image.open(f'./assets/overlays/{image_type}/{overlay_name}.png')
 
-    # Resize the second image to match the first one if they have different sizes
-    if img1.size != img2.size:
-        img2 = img2.resize(img1.size)
+    resolution_overlay_image = Image.open(f'./assets/overlays/resolution/{resolution_overlay_name}.png')
+    audio_overlay_image = Image.open(f'./assets/overlays/audio/{audio_overlay_name}.png')
 
-    # Overlay the transparent image on top of the first image
-    combined = Image.alpha_composite(img1.convert('RGBA'), img2.convert('RGBA'))
+    if image_type == 'primary':
+        composite_image = original_image.convert("RGBA").resize((1000, 1500))
+    elif image_type == 'thumb':
+        composite_image = original_image.convert("RGBA").resize((1000, 562))
+        width, height = resolution_overlay_image.size
+        resolution_overlay_image = resolution_overlay_image.resize((int(width / 2), int(height / 2)))
+    elif image_type == 'backdrop':
+        composite_image = original_image.convert("RGBA").resize((3840, 2160))
 
-    # Save the new image
-    combined.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
+    # Calculate the position for the overlay image
+    overlay_x = 30  # Adjust the horizontal position as needed
+    if image_type == 'primary':
+        overlay_y = 50
+    else:
+        overlay_y = 30
+
+    # Calculate the position for the resolution overlay with offsets
+    overlay_resolution_x = overlay_x + 20  # Adjust the horizontal offset as needed
+    overlay_resolution_y = overlay_y + 20  # Adjust the vertical offset as needed
+
+    # Calculate the position for the semi-transparent background
+    background_height = overlay_resolution_y + resolution_overlay_image.height + 20  # Adjust the Y offset as needed
+
+    # Calculate the position for the resolution overlay with offsets
+    overlay_resolution_x = overlay_x + 20  # Adjust the horizontal offset as needed
+    overlay_resolution_y = overlay_y + 20  # Adjust the vertical offset as needed
+
+    # Calculate the position for the audio codec overlay with offsets
+    overlay_audio_x = (composite_image.width - audio_overlay_image.width) // 2  # Centered horizontally
+    overlay_audio_y = background_height - audio_overlay_image.height - 20  # Y offset with respect to the background
+
+    # Create a semi-transparent background with rounded corners larger than the overlay image
+    overlay_width, overlay_height = resolution_overlay_image.size
+    if image_type == 'primary':
+        overlay_with_background_size = (overlay_width + 50, overlay_height + 50)  # Adjust the size as needed
+        corner_radius = 25  # Adjust the corner radius as needed
+    else:
+        overlay_with_background_size = (overlay_width + 20, overlay_height + 20)
+        corner_radius = 15
+    overlay_with_background = Image.new("RGBA", overlay_with_background_size)
+    background_color = (0, 0, 0, 160)  # Adjust the transparency level as needed (0 = fully transparent, 255 = fully opaque)
+    overlay_mask = Image.new("L", overlay_with_background_size, 0)
+    overlaymask_draw = ImageDraw.Draw(overlay_mask)
+    mask_draw = ImageDraw.Draw(overlay_mask)
+    mask_draw.rounded_rectangle([(0, 0), overlay_with_background_size], corner_radius, fill=255)
+    overlay_with_background.paste(background_color, mask=overlay_mask)
+
+    # Paste the semi-transparent background onto the composite image for the resolution overlay
+    composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
+
+    # Paste the resolution overlay image on top of the composite image at the calculated position
+    if image_type == 'primary':
+        composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
+    else:
+        composite_image.alpha_composite(resolution_overlay_image,(overlay_resolution_x - 15, overlay_resolution_y - 10))
+
+    # Create a semi-transparent background for the audio codec overlay
+    audio_overlay_with_background_size = (audio_overlay_image.width + 50, audio_overlay_image.height + 50)
+    audio_overlay_with_background = Image.new("RGBA", audio_overlay_with_background_size)
+    audio_overlay_mask = Image.new("L", audio_overlay_with_background_size, 0)
+    audio_overlay_mask_draw = ImageDraw.Draw(audio_overlay_mask)
+    audio_overlay_mask_draw.rounded_rectangle([(0, 0), audio_overlay_with_background_size], corner_radius, fill=255)
+    audio_overlay_with_background.paste(background_color, mask=audio_overlay_mask)
+
+    # Paste the semi-transparent background for the audio overlay onto the composite image
+    if image_type == 'primary':
+        composite_image.alpha_composite(audio_overlay_with_background, (overlay_audio_x - 25, overlay_audio_y - 20))
+        # Paste the audio codec overlay image on top of the composite image at the calculated position
+        composite_image.alpha_composite(audio_overlay_image, (overlay_audio_x, overlay_audio_y))
+
+    # Save the modified image
+    # modified_image_path = os.path.join(overlay_folder, f"{movie_name}_modified.png")
+    composite_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
+
+    # # Resize the second image to match the first one if they have different sizes
+    # if original_image.size != img2.size:
+    #     img2 = img2.resize(original_image.size)
+    #
+    # # Overlay the transparent image on top of the first image
+    # combined_image = Image.alpha_composite(original_image.convert('RGBA'), img2.convert('RGBA'))
+    #
+    # # Save the new image
+    # combined_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
 
     response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                                    headers={"X-Emby-Token": api_key})
