@@ -435,7 +435,6 @@ def add_overlay(movie_id, item, image_type):
         logging.error(f"Overlay {audio_overlay_name}.png does not exist, skipping.")
         return False
 
-    # combine poster with the logo
     try:
         original_image = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
     except PIL.UnidentifiedImageError:
@@ -449,61 +448,69 @@ def add_overlay(movie_id, item, image_type):
     resolution_overlay_image = Image.open(f'./assets/overlays/resolution/{resolution_overlay_name}.png')
     audio_overlay_image = Image.open(f'./assets/overlays/audio/{audio_overlay_name}.png')
 
+    width, height = resolution_overlay_image.size
     if image_type == 'primary':
         composite_image = original_image.convert("RGBA").resize((1000, 1500))
     elif image_type == 'thumb':
         composite_image = original_image.convert("RGBA").resize((1000, 562))
-        width, height = resolution_overlay_image.size
-        resolution_overlay_image = resolution_overlay_image.resize((int(width / 2), int(height / 2)))
+        resolution_overlay_image = resolution_overlay_image.resize((int(width / 1.5), int(height / 1.5)))
     elif image_type == 'backdrop':
         composite_image = original_image.convert("RGBA").resize((3840, 2160))
+        resolution_overlay_image = resolution_overlay_image.resize((int(width * 2.5637), int(height * 2.5637)))
 
     # Calculate the position for the overlay image
-    overlay_x = 30  # Adjust the horizontal position as needed
+    overlay_x = 30
     if image_type == 'primary':
         overlay_y = 50
-    else:
+    elif image_type == 'thumb':
         overlay_y = 30
+    elif image_type == 'backdrop':
+        overlay_x = 115
+        overlay_y = 134
 
-    # Calculate the position for the resolution overlay with offsets
-    overlay_resolution_x = overlay_x + 20  # Adjust the horizontal offset as needed
-    overlay_resolution_y = overlay_y + 20  # Adjust the vertical offset as needed
+    overlay_resolution_x = overlay_x + 20
+    overlay_resolution_y = overlay_y + 20
 
     # Calculate the position for the semi-transparent background
-    background_height = overlay_resolution_y + resolution_overlay_image.height + 20  # Adjust the Y offset as needed
+    background_height = overlay_resolution_y + resolution_overlay_image.height + 20
 
     # Calculate the position for the resolution overlay with offsets
-    overlay_resolution_x = overlay_x + 20  # Adjust the horizontal offset as needed
-    overlay_resolution_y = overlay_y + 20  # Adjust the vertical offset as needed
+    overlay_resolution_x = overlay_x + 20
+    overlay_resolution_y = overlay_y + 20
 
     # Calculate the position for the audio codec overlay with offsets
-    overlay_audio_x = (composite_image.width - audio_overlay_image.width) // 2  # Centered horizontally
-    overlay_audio_y = background_height - audio_overlay_image.height - 20  # Y offset with respect to the background
+    overlay_audio_x = (composite_image.width - audio_overlay_image.width) // 2
+    overlay_audio_y = background_height - audio_overlay_image.height - 20
 
     # Create a semi-transparent background with rounded corners larger than the overlay image
     overlay_width, overlay_height = resolution_overlay_image.size
     if image_type == 'primary':
-        overlay_with_background_size = (overlay_width + 50, overlay_height + 50)  # Adjust the size as needed
-        corner_radius = 25  # Adjust the corner radius as needed
-    else:
+        overlay_with_background_size = (overlay_width + 50, overlay_height + 50)
+        corner_radius = 25
+    elif image_type == 'thumb':
         overlay_with_background_size = (overlay_width + 20, overlay_height + 20)
         corner_radius = 15
+    elif image_type == 'backdrop':
+        overlay_with_background_size = (overlay_width + 76, overlay_height + 76)
+        corner_radius = 50
+
     overlay_with_background = Image.new("RGBA", overlay_with_background_size)
-    background_color = (0, 0, 0, 160)  # Adjust the transparency level as needed (0 = fully transparent, 255 = fully opaque)
+    background_color = (0, 0, 0, 160)
     overlay_mask = Image.new("L", overlay_with_background_size, 0)
     overlaymask_draw = ImageDraw.Draw(overlay_mask)
     mask_draw = ImageDraw.Draw(overlay_mask)
     mask_draw.rounded_rectangle([(0, 0), overlay_with_background_size], corner_radius, fill=255)
     overlay_with_background.paste(background_color, mask=overlay_mask)
 
-    # Paste the semi-transparent background onto the composite image for the resolution overlay
-    composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
-
-    # Paste the resolution overlay image on top of the composite image at the calculated position
     if image_type == 'primary':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
         composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
-    else:
+    elif image_type == 'thumb':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
         composite_image.alpha_composite(resolution_overlay_image,(overlay_resolution_x - 15, overlay_resolution_y - 10))
+    elif image_type == 'backdrop':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 40, overlay_resolution_y - 33))
+        composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
 
     # Create a semi-transparent background for the audio codec overlay
     audio_overlay_with_background_size = (audio_overlay_image.width + 50, audio_overlay_image.height + 50)
@@ -516,22 +523,9 @@ def add_overlay(movie_id, item, image_type):
     # Paste the semi-transparent background for the audio overlay onto the composite image
     if image_type == 'primary':
         composite_image.alpha_composite(audio_overlay_with_background, (overlay_audio_x - 25, overlay_audio_y - 20))
-        # Paste the audio codec overlay image on top of the composite image at the calculated position
         composite_image.alpha_composite(audio_overlay_image, (overlay_audio_x, overlay_audio_y))
 
-    # Save the modified image
-    # modified_image_path = os.path.join(overlay_folder, f"{movie_name}_modified.png")
     composite_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
-
-    # # Resize the second image to match the first one if they have different sizes
-    # if original_image.size != img2.size:
-    #     img2 = img2.resize(original_image.size)
-    #
-    # # Overlay the transparent image on top of the first image
-    # combined_image = Image.alpha_composite(original_image.convert('RGBA'), img2.convert('RGBA'))
-    #
-    # # Save the new image
-    # combined_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
 
     response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                                    headers={"X-Emby-Token": api_key})
@@ -542,17 +536,12 @@ def add_overlay(movie_id, item, image_type):
 
     image_data_base64 = base64.b64encode(image_data)
 
-    # Define the headers for the request
     headers = {"X-Emby-Token": api_key,
                "Content-Type": "image/jpeg"}
-
-    # Define the endpoint URL
     url = f"{emby_url}/Items/{movie_id}/Images/{image_type}/"
 
-    # Send the POST request
     response = requests.post(url, headers=headers, data=image_data_base64)
 
-    # Check the response
     if response.status_code == 204:
         logging.info('Image uploaded successfully')
         os.remove(f'./temp/{movie_id}.jpg')
