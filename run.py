@@ -123,7 +123,7 @@ def collection(library, library_type, items, filename):
 
     # Iterate over collections
     for collection_name, collection_data in config_vars["collections"].items():
-        # Add the sub-section to the collections dictionary
+        # Add the subsection to the collections dictionary
         collections_dict[collection_name] = collection_data
 
     # Get a list of all existing collections in the Emby server
@@ -448,10 +448,6 @@ def add_overlay(movie_id, item, image_type):
     # Calculate the position for the semi-transparent background
     background_height = overlay_resolution_y + resolution_overlay_image.height + 20
 
-    # Calculate the position for the resolution overlay with offsets
-    overlay_resolution_x = overlay_x + 20
-    overlay_resolution_y = overlay_y + 20
-
     # Calculate the position for the audio codec overlay with offsets
     overlay_audio_x = (composite_image.width - audio_overlay_image.width) // 2
     overlay_audio_y = background_height - audio_overlay_image.height - 20
@@ -479,25 +475,25 @@ def add_overlay(movie_id, item, image_type):
     if image_type == 'primary':
         composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
         composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
+
+        # Prepare audio overlay
+        audio_overlay_with_background_size = (audio_overlay_image.width + 50, audio_overlay_image.height + 50)
+        audio_overlay_with_background = Image.new("RGBA", audio_overlay_with_background_size)
+        audio_overlay_mask = Image.new("L", audio_overlay_with_background_size, 0)
+        audio_overlay_mask_draw = ImageDraw.Draw(audio_overlay_mask)
+        audio_overlay_mask_draw.rounded_rectangle([(0, 0), audio_overlay_with_background_size], corner_radius, fill=255)
+        audio_overlay_with_background.paste(background_color, mask=audio_overlay_mask)
+
+        # Paste audio overlay
+        composite_image.alpha_composite(audio_overlay_with_background, (overlay_audio_x - 25, overlay_audio_y - 20))
+        composite_image.alpha_composite(audio_overlay_image, (overlay_audio_x, overlay_audio_y))
+
     elif image_type == 'thumb':
         composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
         composite_image.alpha_composite(resolution_overlay_image,(overlay_resolution_x - 15, overlay_resolution_y - 10))
     elif image_type == 'backdrop':
         composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 40, overlay_resolution_y - 33))
         composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
-
-    # Create a semi-transparent background for the audio codec overlay
-    audio_overlay_with_background_size = (audio_overlay_image.width + 50, audio_overlay_image.height + 50)
-    audio_overlay_with_background = Image.new("RGBA", audio_overlay_with_background_size)
-    audio_overlay_mask = Image.new("L", audio_overlay_with_background_size, 0)
-    audio_overlay_mask_draw = ImageDraw.Draw(audio_overlay_mask)
-    audio_overlay_mask_draw.rounded_rectangle([(0, 0), audio_overlay_with_background_size], corner_radius, fill=255)
-    audio_overlay_with_background.paste(background_color, mask=audio_overlay_mask)
-
-    # Paste the semi-transparent background for the audio overlay onto the composite image
-    if image_type == 'primary':
-        composite_image.alpha_composite(audio_overlay_with_background, (overlay_audio_x - 25, overlay_audio_y - 20))
-        composite_image.alpha_composite(audio_overlay_image, (overlay_audio_x, overlay_audio_y))
 
     composite_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
 
