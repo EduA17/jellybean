@@ -3,10 +3,11 @@ import requests
 from dotenv import load_dotenv
 import yaml
 import PIL
-from PIL import Image
+from PIL import Image, ImageDraw
 import base64
 import json
 import logging
+import re
 
 log_file = "jellybean.log"
 
@@ -44,9 +45,12 @@ load_dotenv(".env")
 emby_url = os.getenv('EMBY_URL')
 api_key = os.getenv('EMBY_API_KEY')
 
+with open('audio_codecs.yml', 'r') as file:
+    regexes = yaml.safe_load(file)
+    audio_regex = regexes['regex']
 
 def main():
-    # Get admin user ID
+
     response = requests.get(f"{emby_url}/Users",
                             headers={"X-Emby-Token": api_key})
 
@@ -59,7 +63,6 @@ def main():
             logging.info(f"Admin user ID: {user_id}")
             break
 
-    # Get list of libraries from the config.yaml file
     with open("config.yaml", "r") as file:
         config_vars = yaml.safe_load(file)
 
@@ -68,10 +71,8 @@ def main():
 
     libraries_dict = {}
 
-    # Get the parent id of each library
     for library in libraries:
 
-        # Get all items
         response = requests.get(f"{emby_url}/Users/{user_id}/Views",
                                 headers={"X-Emby-Token": api_key})
 
@@ -88,10 +89,8 @@ def main():
                 parent_id = None
                 collection_type = None
 
-        # Add the library name and parent id to the dictionary
         libraries_dict.update({library: {"parent_id": parent_id, "collection_type": collection_type}})
 
-    # Cycle through the libraries
     for library in libraries_dict:
 
         logging.info(f"Checking {library}")
@@ -104,7 +103,6 @@ def main():
             logging.info(f"{library}: Library is not set to movies or tv shows, skipping library.")
             continue
 
-        # Check if library is enabled
         if not config_vars["libraries"][library]["enabled"]:
             logging.info(
                 f"Library Name: {library} \nLibrary Type: {library_type}\nAction: Library is not enabled in the config.yaml file, skipping library.\n------")
@@ -125,7 +123,7 @@ def collection(library, library_type, items, filename):
 
     # Iterate over collections
     for collection_name, collection_data in config_vars["collections"].items():
-        # Add the sub-section to the collections dictionary
+        # Add the subsection to the collections dictionary
         collections_dict[collection_name] = collection_data
 
     # Get a list of all existing collections in the Emby server
@@ -148,19 +146,15 @@ def collection(library, library_type, items, filename):
 
 
 def overlays(library, library_type, items, config_vars):
-    # Check if overlays will be added or removed
     overlay_config = config_vars["libraries"][library]["overlays"]
 
-    # Check if Overlays is set to true
     if overlay_config:
         logging.info(f"{library}: Overlays is true in the config.yaml file, adding missing overlays.")
     else:
         logging.info(f"{library}: Overlays is false in the config.yaml file, removing overlays.")
 
     # MOVIES
-
     if library_type == 'movies':
-        # Loop through all movies
         logging.info(f"Found {len(items)} items in {library}")
         for item in items:
             logging.info(f"Checking {item['Name']}: {item['Id']}")
@@ -196,7 +190,6 @@ def overlays(library, library_type, items, config_vars):
                     update_tag(movie, item, False, tag)
 
     # TV SHOWS
-
     elif library_type == 'tvshows':
         logging.info(f'Found {len(items)} items in {library}')
         # Loop through all tv shows
@@ -204,12 +197,10 @@ def overlays(library, library_type, items, config_vars):
 
             response2 = requests.get(f"{emby_url}/Users/{user_id}/Items/{item['Id']}",
                                      headers={"X-Emby-Token": api_key})
-
             tv_show = response2.json()
 
             logging.info(f"Checking {item['Name']}: {tv_show['Id']}")
 
-            # Get all episodes from that TV Show
             response3 = requests.get(f"{emby_url}/Shows/{tv_show['Id']}/Episodes",
                                      headers={"X-Emby-Token": api_key})
             try:
@@ -218,13 +209,11 @@ def overlays(library, library_type, items, config_vars):
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
 
-            # Get the first episode ID
             if len(episodes) == 0:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
             episode_id = episodes[0]["Id"]
 
-            # Check that episode_id is not None
             if episode_id is None:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
@@ -234,7 +223,6 @@ def overlays(library, library_type, items, config_vars):
 
             episode = response4.json()
 
-            # Get MediaSources from first episode
             if not 'MediaSources' in episode:
                 logging.info(f"Episode {episode['Name']} has no media sources, skipping.")
                 continue
@@ -277,9 +265,52 @@ def check_tags(file):
     exists = any(item['Name'] == "custom-overlay" for item in file['TagItems'])
     return exists
 
-
 def check_hdr(item):
     # Get movie from item
+    response = requests.get(f"{emby_url}/Users/{user_id}/Items/{item['Id']}",
+                            headers={"X-Emby-Token": api_key})
+
+    media_file = response.json()
+
+    # Check if media_file has "Type": "Series"
+    if media_file["Type"] == "Series":
+        logging.info("Media file is a TV show, getting the first episode")
+        # Get all episodes from that TV Show
+        response2 = requests.get(f"{emby_url}/Shows/{media_file['Id']}/Episodes",
+                                 headers={"X-Emby-Token": api_key})
+
+        episodes = response2.json()['Items']
+
+        episode_id = episodes[0]["Id"]
+
+        response3 = requests.get(f"{emby_url}/Users/{user_id}/Items/{episode_id}",
+                                 headers={"X-Emby-Token": api_key})
+        episode = response3.json()
+
+        media_file = episode
+    path = media_file['MediaSources'][0]['Path']
+    if media_file['Width'] >= 2500:
+        logging.info(f"Media file: {media_file['Name']}, and path is: {path}")
+        if 'DV' in path:
+            if 'HDR' in path:
+                logging.info("Media file is DV + HDR")
+                return '4KDVHDR'
+            logging.info("Media file is DV")
+            return '4KDV'
+        elif 'HDR' in path:
+            if 'HDR10Plus' in path:
+                logging.info("Media file is HDR10+")
+                return '4KHDRPLUS'
+            logging.info("Media file is HDR")
+            return '4KHDR'
+        else:
+            logging.info("Media file is SDR")
+            return '4KSDR'
+    else:
+        # Placeholder
+        return '1080p'
+
+def check_audio(item):
     response = requests.get(f"{emby_url}/Users/{user_id}/Items/{item['Id']}",
                             headers={"X-Emby-Token": api_key})
 
@@ -305,46 +336,31 @@ def check_hdr(item):
         media_file = episode
 
     # Check if media_file resolution is 4K
-    if media_file['Width'] >= 2500:
-        logging.info(f"Media file: {media_file['Name']}, and path is: {media_file['MediaSources'][0]['Path']}")
-        if 'DV' in media_file['MediaSources'][0]['Path']:
-            if 'HDR' in media_file['MediaSources'][0]['Path']:
-                logging.info("Media file is DV + HDR")
-                return '4KDVHDR'
-            logging.info("Media file is DV")
-            return '4KDV'
-        elif 'HDR' in media_file['MediaSources'][0]['Path']:
-            if 'HDR10Plus' in media_file['MediaSources'][0]['Path']:
-                logging.info("Media file is HDR10+")
-                return '4KHDRPLUS'
-            logging.info("Media file is HDR")
-            return '4KHDR'
-        else:
-            logging.info("Media file is SDR")
-            return '4KSDR'
-    else:
-        # Placeholder for 1080p overlays
-        return '1080p'
+    path = media_file['MediaSources'][0]['Path']
+
+    for condition in audio_regex:
+        key = condition["key"]
+        regex = condition["value"]
+
+        if re.search(regex, path):
+            logging.info(f"Media file has audio codec: {key}")
+            return key
+    return None
 
 
 def update_tag(movie, item, add, tag):
     if add:
-        # Add the tag to the item
         movie["TagItems"].append(tag)
     else:
-        # remove the tag from the item
         for tags in movie['TagItems']:
             if tags['Name'] == "custom-overlay":
                 movie['TagItems'].remove(tags)
                 break
 
-    # Update the movie in the Emby server
     response3 = requests.post(f"{emby_url}/Items/{item['Id']}",
                               headers={"X-Emby-Token": api_key,
                                        "Content-Type": "application/json"},
                               data=json.dumps(movie))
-
-    # Print response from the request
 
     if response3.status_code == 204:
         logging.info(f'Tag for {item["Name"]} updated successfully')
@@ -377,21 +393,24 @@ def add_overlay(movie_id, item, image_type):
     with open(f"./assets/originals/{image_type}/{movie_id}.jpg", "wb") as f:
         f.write(response.content)
 
-    overlay_name = check_hdr(item)
+    resolution_overlay_name = check_hdr(item)
+    audio_overlay_name = check_audio(item)
 
-    # Check if the image exists
+    # Check if the images exists
     if not os.path.exists(f'./assets/originals/{image_type}/{movie_id}.jpg'):
         logging.info(f"{item['Name']} does not have a {image_type} image, skipping.")
         return False
 
     # Check if the overlay file exists
-    if not os.path.exists(f'./assets/overlays/{image_type}/{overlay_name}.png'):
-        logging.info(f"Overlay {overlay_name}.png does not exist, skipping.")
+    if not os.path.exists(f'./assets/overlays/resolution/{resolution_overlay_name}.png'):
+        logging.error(f"Overlay {resolution_overlay_name}.png does not exist, skipping.")
+        return False
+    if not os.path.exists(f'./assets/overlays/audio/{audio_overlay_name}.png'):
+        logging.error(f"Overlay {audio_overlay_name}.png does not exist, skipping.")
         return False
 
-    # combine poster with the logo
     try:
-        img1 = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
+        original_image = Image.open(f'./assets/originals/{image_type}/{movie_id}.jpg')
     except PIL.UnidentifiedImageError:
         logging.error(f"Unable to open {image_type}/{movie_id}.jpg, skipping.")
         os.remove(f'./assets/originals/{image_type}/{movie_id}.jpg')
@@ -399,17 +418,84 @@ def add_overlay(movie_id, item, image_type):
     except FileNotFoundError:
         logging.error(f"Poster not found for {movie_id}.jpg, skipping.")
         return False
-    img2 = Image.open(f'./assets/overlays/{image_type}/{overlay_name}.png')
 
-    # Resize the second image to match the first one if they have different sizes
-    if img1.size != img2.size:
-        img2 = img2.resize(img1.size)
+    resolution_overlay_image = Image.open(f'./assets/overlays/resolution/{resolution_overlay_name}.png')
+    audio_overlay_image = Image.open(f'./assets/overlays/audio/{audio_overlay_name}.png')
 
-    # Overlay the transparent image on top of the first image
-    combined = Image.alpha_composite(img1.convert('RGBA'), img2.convert('RGBA'))
+    width, height = resolution_overlay_image.size
+    if image_type == 'primary':
+        composite_image = original_image.convert("RGBA").resize((1000, 1500))
+    elif image_type == 'thumb':
+        composite_image = original_image.convert("RGBA").resize((1000, 562))
+        resolution_overlay_image = resolution_overlay_image.resize((int(width / 1.5), int(height / 1.5)))
+    elif image_type == 'backdrop':
+        composite_image = original_image.convert("RGBA").resize((3840, 2160))
+        resolution_overlay_image = resolution_overlay_image.resize((int(width * 2.5637), int(height * 2.5637)))
 
-    # Save the new image
-    combined.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
+    # Calculate the position for the overlay image
+    overlay_x = 30
+    if image_type == 'primary':
+        overlay_y = 50
+    elif image_type == 'thumb':
+        overlay_y = 30
+    elif image_type == 'backdrop':
+        overlay_x = 115
+        overlay_y = 134
+
+    overlay_resolution_x = overlay_x + 20
+    overlay_resolution_y = overlay_y + 20
+
+    # Calculate the position for the semi-transparent background
+    background_height = overlay_resolution_y + resolution_overlay_image.height + 20
+
+    # Calculate the position for the audio codec overlay with offsets
+    overlay_audio_x = (composite_image.width - audio_overlay_image.width) // 2
+    overlay_audio_y = background_height - audio_overlay_image.height - 20
+
+    # Create a semi-transparent background with rounded corners larger than the overlay image
+    overlay_width, overlay_height = resolution_overlay_image.size
+    if image_type == 'primary':
+        overlay_with_background_size = (overlay_width + 50, overlay_height + 50)
+        corner_radius = 25
+    elif image_type == 'thumb':
+        overlay_with_background_size = (overlay_width + 20, overlay_height + 20)
+        corner_radius = 15
+    elif image_type == 'backdrop':
+        overlay_with_background_size = (overlay_width + 76, overlay_height + 76)
+        corner_radius = 50
+
+    overlay_with_background = Image.new("RGBA", overlay_with_background_size)
+    background_color = (0, 0, 0, 160)
+    overlay_mask = Image.new("L", overlay_with_background_size, 0)
+    overlaymask_draw = ImageDraw.Draw(overlay_mask)
+    mask_draw = ImageDraw.Draw(overlay_mask)
+    mask_draw.rounded_rectangle([(0, 0), overlay_with_background_size], corner_radius, fill=255)
+    overlay_with_background.paste(background_color, mask=overlay_mask)
+
+    if image_type == 'primary':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
+        composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
+
+        # Prepare audio overlay
+        audio_overlay_with_background_size = (audio_overlay_image.width + 50, audio_overlay_image.height + 50)
+        audio_overlay_with_background = Image.new("RGBA", audio_overlay_with_background_size)
+        audio_overlay_mask = Image.new("L", audio_overlay_with_background_size, 0)
+        audio_overlay_mask_draw = ImageDraw.Draw(audio_overlay_mask)
+        audio_overlay_mask_draw.rounded_rectangle([(0, 0), audio_overlay_with_background_size], corner_radius, fill=255)
+        audio_overlay_with_background.paste(background_color, mask=audio_overlay_mask)
+
+        # Paste audio overlay
+        composite_image.alpha_composite(audio_overlay_with_background, (overlay_audio_x - 25, overlay_audio_y - 20))
+        composite_image.alpha_composite(audio_overlay_image, (overlay_audio_x, overlay_audio_y))
+
+    elif image_type == 'thumb':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 25, overlay_resolution_y - 20))
+        composite_image.alpha_composite(resolution_overlay_image,(overlay_resolution_x - 15, overlay_resolution_y - 10))
+    elif image_type == 'backdrop':
+        composite_image.alpha_composite(overlay_with_background, (overlay_resolution_x - 40, overlay_resolution_y - 33))
+        composite_image.alpha_composite(resolution_overlay_image, (overlay_resolution_x, overlay_resolution_y))
+
+    composite_image.convert('RGB').save(f'./temp/{movie_id}.jpg', 'JPEG')
 
     response = requests.delete(f"{emby_url}/Items/{movie_id}/Images/{image_type}",
                                    headers={"X-Emby-Token": api_key})
@@ -420,17 +506,12 @@ def add_overlay(movie_id, item, image_type):
 
     image_data_base64 = base64.b64encode(image_data)
 
-    # Define the headers for the request
     headers = {"X-Emby-Token": api_key,
                "Content-Type": "image/jpeg"}
-
-    # Define the endpoint URL
     url = f"{emby_url}/Items/{movie_id}/Images/{image_type}/"
 
-    # Send the POST request
     response = requests.post(url, headers=headers, data=image_data_base64)
 
-    # Check the response
     if response.status_code == 204:
         logging.info('Image uploaded successfully')
         os.remove(f'./temp/{movie_id}.jpg')
