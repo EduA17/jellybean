@@ -113,38 +113,6 @@ def main():
         overlays(library, library_type, items, config_vars)
 
 
-def collection(library, library_type, items, filename):
-    # Get the config from the filename
-    with open(f"./collections/{filename}", "r") as file:
-        config_vars = yaml.safe_load(file)
-
-    # Create an empty dictionary to store the collections
-    collections_dict = {}
-
-    # Iterate over collections
-    for collection_name, collection_data in config_vars["collections"].items():
-        # Add the subsection to the collections dictionary
-        collections_dict[collection_name] = collection_data
-
-    # Get a list of all existing collections in the Emby server
-    response = requests.get(f"{emby_url}/Users/{user_id}/Views",
-                            headers={"X-Emby-Token": api_key})
-
-    collections = response.json()["Items"]
-
-    # Loop through all collections
-    for collection_name, collection_data in collections_dict.items():
-        logging.info(f"Checking {collection_name}")
-        collection_type = collection_data["type"]
-        logging.info(f"Collection Type: {collection_type}")
-        collection_link = collection_data["link"]
-        logging.info(f"Collection Link: {collection_link}")
-        collection_limit = collection_data["limit"]
-        logging.info(f"Collection Limit: {collection_limit}")
-
-        # Check if collection exists in the server
-
-
 def overlays(library, library_type, items, config_vars):
     overlay_config = config_vars["libraries"][library]["overlays"]
 
@@ -206,6 +174,9 @@ def overlays(library, library_type, items, config_vars):
             try:
                 episodes = response3.json()['Items']
             except json.JSONDecodeError:
+                logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
+                continue
+            except simplejson.errors.JSONDecodeError:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
 
