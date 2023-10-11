@@ -1,5 +1,6 @@
 import os
 import requests
+import simplejson
 from dotenv import load_dotenv
 import yaml
 import PIL
@@ -174,6 +175,9 @@ def overlays(library, library_type, items, config_vars):
             try:
                 episodes = response3.json()['Items']
             except json.JSONDecodeError:
+                logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
+                continue
+            except requests.errors.JSONDecodeError:
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
             except simplejson.errors.JSONDecodeError:
