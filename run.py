@@ -174,13 +174,7 @@ def overlays(library, library_type, items, config_vars):
                                      headers={"X-Emby-Token": api_key})
             try:
                 episodes = response3.json()['Items']
-            except json.JSONDecodeError:
-                logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
-                continue
-            except requests.errors.JSONDecodeError:
-                logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
-                continue
-            except simplejson.errors.JSONDecodeError:
+            except (json.JSONDecodeError, requests.exceptions.JSONDecodeError, simplejson.errors.JSONDecodeError):
                 logging.info(f"TV Show {item['Name']} has no episodes, skipping.")
                 continue
 
